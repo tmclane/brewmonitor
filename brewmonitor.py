@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Portions of this code were taken from https://github.com/switchdoclabs/iBeacon-Scanner-.git
-# SwitchDoc Labs, LLC - June 2014
+#   SwitchDoc Labs, LLC - June 2014
 import argparse
 import bluetooth._bluetooth as bluez
 import json
@@ -19,7 +19,7 @@ PORT = 1883
 TIMEOUT = 25
 TOPIC_PREFIX = "monitor/brewometer"
 
-# Store list of active brewometers
+# Store the active brewometers
 brewometers = {}
 
 isBean = re.compile('^a495....c5b14b44b5121370f02d74de$')
