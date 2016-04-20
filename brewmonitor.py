@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # Portions of this code were taken from https://github.com/switchdoclabs/iBeacon-Scanner-.git
 # SwitchDoc Labs, LLC - June 2014
+import argparse
 import bluetooth._bluetooth as bluez
 import json
-import optparse
 import os
 import paho.mqtt.publish as publish
 import re
@@ -91,7 +91,7 @@ def process_ble_advertisements(sock, loop_count=100):
                         "sg": fmt_major_minor(pkt[report_pkt_offset - 4: report_pkt_offset - 2]) / 1000.0,
                         "addr": packed_bdaddr_to_string(pkt[report_pkt_offset + 3:report_pkt_offset + 9])
                     }
-                    reports[report["udid"]] = report
+                    reports[report["addr"]] = report
 
     sock.setsockopt( bluez.SOL_HCI, bluez.HCI_FILTER, old_filter )
     return reports
@@ -100,12 +100,12 @@ def process_ble_advertisements(sock, loop_count=100):
 def process_brewometers(sock):
     timestamp = int(time.time())
     reports = process_ble_advertisements(sock)
-    for udid, report in reports.iteritems():
-        if udid not in brewometers:
-            brewometers[udid] = report
+    for addr, report in reports.iteritems():
+        if addr not in brewometers:
+            brewometers[addr] = report
 
-        brewometers[udid]['timestamp'] = timestamp
-        brewometers[udid].update(report)
+        brewometers[addr]['timestamp'] = timestamp
+        brewometers[addr].update(report)
 
     return brewometers
 
@@ -115,9 +115,9 @@ def publish_mqtt(mqtt_config, brewometers):
     server = mqtt_config.get('server', SERVER)
     port = mqtt_config.get('port', PORT)
 
-    for udid, report in brewometers.iteritems():
+    for addr, report in brewometers.iteritems():
         payload = json.dumps(report)
-        publish.single("/".join([topic_prefix, udid]),
+        publish.single("/".join([topic_prefix, addr]),
                        payload, hostname=server, port=port)
 
 
@@ -125,6 +125,7 @@ def monitor(opts, dev_id=0):
     mqtt_config = {
         'server': opts.mqttserver,
         'port': opts.mqttport if opts.mqttport else PORT,
+        'topic_prefix': opts.mqtttopic if opts.mqtttopic else TOPIC_PREFIX
     }
     try:
         sock = bluez.hci_open_dev(dev_id)
@@ -140,12 +141,12 @@ def monitor(opts, dev_id=0):
         alive = {}
         dead = []
         reports = process_brewometers(sock)
-        for udid, report in reports.iteritems():
+        for addr, report in reports.iteritems():
             now = time.time()
             if now - report['timestamp'] > TIMEOUT:
-                dead.append(udid)
+                dead.append(addr)
             else:
-                alive[udid] = report
+                alive[addr] = report
 
 
         if opts.mqttserver:
@@ -153,16 +154,15 @@ def monitor(opts, dev_id=0):
 
         if dead:
             print("Brewometers: %s are no longer reporting.." % dead)
-            for udid in dead:
-                del brewometers[udid]
+            for addr in dead:
+                del brewometers[addr]
 
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser(version=__version__)
 
     mqtt = parser.add_argument_group("MQTT Options")
-    mqtt.add_argument('--topic', help="MQTT topic prefix")
+    mqtt.add_argument('--mqtttopic', help="MQTT topic prefix")
     mqtt.add_argument('--mqttserver', type=str, help="MQTT server")
     mqtt.add_argument('--mqttport', type=int, help="MQTT port")
     parser.add_argument_group(mqtt)
